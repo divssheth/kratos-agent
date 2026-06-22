@@ -13,3 +13,16 @@ dependencies:
     registry: false
     transport: http
     url: https://learn.microsoft.com/api/mcp
+  - name: powerbi-fabric
+    registry: false
+    transport: http
+    url: http://localhost:5173
+    auth_modes: agent_app,user_obo
+    description: Power BI & Fabric semantic model discovery, DAX generation, and querying
+    tools:
+      - fabric_list_workspaces
+      - fabric_list_semantic_models
+      - fabric_get_semantic_model_schema
+      - fabric_generate_dax_from_nl
+      - fabric_validate_or_explain_dax
+      - fabric_query_semantic_model

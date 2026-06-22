@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     apm_use_cases_root: str = "use-cases"
     apm_startup_sync: bool = True
 
+    # OBO / delegated-auth rollout flags (default OFF for non-breaking rollout)
+    enable_user_auth_obo: bool = False
+    enable_powerbi_fabric_mcp: bool = False
+    enable_workspace_selector: bool = False
+
     # Local mode — run the backend without any Azure services.
     #   * SQLite replaces Cosmos DB (persistence under ``local_data_dir``)
     #   * GitHub OAuth token replaces Foundry / Managed Identity for the model call

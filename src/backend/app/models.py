@@ -94,10 +94,23 @@ Attachment = FileAttachment | DirectoryAttachment | SelectionAttachment
 
 
 class AgentRequest(BaseModel):
+    class AuthContext(BaseModel):
+        """Optional caller auth context for delegated/OBO flows.
+
+        This carries non-secret identity hints only. Access/refresh tokens are
+        intentionally excluded from request payloads and handled server-side.
+        """
+
+        mode: str = "none"  # "none" | "obo"
+        userId: str = ""
+        tenantId: str = ""
+        oboEnabled: bool = False
+
     conversationId: str
     message: str
     useCase: str = "generic"
     attachments: list[Attachment] = Field(default_factory=list)
+    authContext: AuthContext | None = None
 
 
 class ToolCallEvent(BaseModel):

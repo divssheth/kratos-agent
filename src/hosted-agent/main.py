@@ -284,7 +284,13 @@ def _collect_generated_files(response_text: str) -> list[tuple[str, bytes]]:
     return files
 
 
-async def _stream_response(invocation_id: str, conversation_id: str, message: str, use_case: str):
+async def _stream_response(
+    invocation_id: str,
+    conversation_id: str,
+    message: str,
+    use_case: str,
+    auth_context: dict | None = None,
+):
     """Run the Copilot SDK agent and stream our SSE event schema."""
     start_time = time.monotonic()
     total_tool_calls = 0
@@ -318,6 +324,7 @@ async def _stream_response(invocation_id: str, conversation_id: str, message: st
         async for event in _copilot_agent.run(
             message=message,
             conversation_id=conversation_id,
+            auth_context=auth_context,
         ):
             if isinstance(event, ThoughtEvent):
                 collected_thoughts.append(event.content)
@@ -445,6 +452,7 @@ async def handle_invoke(request: Request) -> Response:
 
         conversation_id = data.get("conversationId", str(uuid.uuid4()))
         use_case = data.get("useCase", "generic")
+        auth_context = data.get("authContext") if isinstance(data.get("authContext"), dict) else None
 
         # The proxy may embed metadata tags in the input when the Invocations
         # gateway strips custom JSON fields.  Parse them and remove from the
@@ -491,7 +499,7 @@ async def handle_invoke(request: Request) -> Response:
     await _ensure_registry(use_case)
 
     return StreamingResponse(
-        _stream_response(request.state.invocation_id, conversation_id, message, use_case),
+        _stream_response(request.state.invocation_id, conversation_id, message, use_case, auth_context),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
     )

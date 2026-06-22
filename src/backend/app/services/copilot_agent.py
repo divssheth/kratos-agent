@@ -597,6 +597,7 @@ class CopilotAgent:
         sdk_session_id: str | None = None,
         use_case: str = "",
         eval_run_id: str | None = None,
+        auth_context: dict | None = None,
     ) -> AsyncGenerator[ThoughtEvent | ToolCallEvent | ContentEvent | ErrorEvent | UserInputRequestEvent, None]:
         """Send a message and stream SDK events as typed SSE events."""
 
@@ -635,6 +636,9 @@ class CopilotAgent:
                 span.set_attribute("kratos.use_case", str(use_case))
             if eval_run_id:
                 span.set_attribute("kratos.eval_run_id", str(eval_run_id))
+            if auth_context:
+                # Never record tokens/secrets; trace only high-level auth mode.
+                span.set_attribute("kratos.auth_mode", str(auth_context.get("mode", "none")))
             queue: asyncio.Queue = asyncio.Queue()
             self._queues[conversation_id] = queue
             self._tool_counters[conversation_id] = 0

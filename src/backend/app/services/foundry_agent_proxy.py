@@ -10,6 +10,7 @@ import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import aiohttp
 from azure.identity.aio import DefaultAzureCredential
@@ -45,6 +46,7 @@ class FoundryAgentProxy:
         # In local mode the hosted agent is an unauthenticated localhost stub;
         # skip the Azure credential entirely (container has no `az` CLI / MSI).
         self._local_mode = settings.is_local_mode
+        self._enable_user_auth_obo = settings.enable_user_auth_obo
         self._credential = None if self._local_mode else DefaultAzureCredential()
         self._http_session: aiohttp.ClientSession | None = None
         # Warm pool of pre-provisioned, UNCLAIMED gateway sessions.
@@ -251,6 +253,7 @@ class FoundryAgentProxy:
         system_prompt: str | None = None,
         agent_session_id: str | None = None,
         eval_run_id: str | None = None,
+        auth_context: dict[str, Any] | None = None,
     ) -> AsyncGenerator[dict, None]:
         """Invoke the hosted agent and yield event dicts.
 
@@ -290,6 +293,18 @@ class FoundryAgentProxy:
             "conversationId": conversation_id,
             "useCase": use_case,
         }
+        if self._local_mode or not self._enable_user_auth_obo:
+            # Keep existing behavior unless OBO is explicitly enabled.
+            auth_context = None
+        if auth_context:
+            # Forward only non-secret auth hints. Token exchange remains server-side.
+            payload["authContext"] = {
+                "mode": str(auth_context.get("mode", "none")),
+                "userId": str(auth_context.get("userId", "")),
+                "tenantId": str(auth_context.get("tenantId", "")),
+                "oboEnabled": bool(auth_context.get("oboEnabled", False)),
+            }
+            headers["x-kratos-auth-mode"] = str(payload["authContext"].get("mode", "none"))
 
         # Append agent_session_id as query parameter to reuse the same
         # gateway session (container) across messages in a conversation. For the

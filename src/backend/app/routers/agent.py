@@ -162,6 +162,7 @@ async def chat(body: AgentRequest, request: Request) -> EventSourceResponse:
                 system_prompt=system_prompt,
                 agent_session_id=agent_session_id,
                 eval_run_id=eval_run_id or None,
+                auth_context=(body.authContext.model_dump() if body.authContext else None),
             ):
                 event_name = event_dict.get("event")
                 event_data = event_dict.get("data", {})

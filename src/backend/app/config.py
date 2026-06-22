@@ -71,6 +71,12 @@ class Settings(BaseSettings):
     enable_powerbi_fabric_mcp: bool = False
     enable_workspace_selector: bool = False
 
+    # OBO token exchange (Entra ID On-Behalf-Of flow)
+    # Required when enable_user_auth_obo=True for silent token refresh
+    azure_tenant_id: str = ""
+    azure_client_id: str = ""
+    azure_client_secret: str = ""
+
     # Local mode — run the backend without any Azure services.
     #   * SQLite replaces Cosmos DB (persistence under ``local_data_dir``)
     #   * GitHub OAuth token replaces Foundry / Managed Identity for the model call

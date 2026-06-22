@@ -25,6 +25,7 @@ from app.routers import (
     health,
     import_persona,
     settings,
+    token,
     traces,
     use_cases,
 )
@@ -237,6 +238,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(health.router, tags=["health"])
+app.include_router(token.router, tags=["auth"])
 app.include_router(conversations.router, prefix="/api/conversations", tags=["conversations"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(settings.router, prefix="/api/settings", tags=["settings"])

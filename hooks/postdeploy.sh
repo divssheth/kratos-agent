@@ -82,6 +82,35 @@ fi
 
 for use_case in "${SELECTED[@]}"; do
   LOCAL_PATH="$USE_CASES_DIR/$use_case"
+  UPLOAD_PATH="$LOCAL_PATH"
+  TMP_DIR=""
+
+  if [ -n "${POWERBI_FABRIC_MCP_URL:-}" ] && [ -f "$LOCAL_PATH/apm.yml" ]; then
+    if grep -q "name: powerbi-fabric" "$LOCAL_PATH/apm.yml"; then
+      TMP_DIR="$(mktemp -d)"
+      cp -R "$LOCAL_PATH/." "$TMP_DIR/"
+      awk -v new_url="$POWERBI_FABRIC_MCP_URL" '
+        BEGIN { in_powerbi = 0 }
+        /^  - name: / {
+          if ($0 ~ /^  - name: powerbi-fabric$/) {
+            in_powerbi = 1
+          } else {
+            in_powerbi = 0
+          }
+        }
+        {
+          if (in_powerbi == 1 && $0 ~ /^    url: /) {
+            sub(/^    url: .*/, "    url: " new_url)
+          }
+          print
+        }
+      ' "$TMP_DIR/apm.yml" > "$TMP_DIR/apm.yml.updated"
+      mv "$TMP_DIR/apm.yml.updated" "$TMP_DIR/apm.yml"
+      UPLOAD_PATH="$TMP_DIR"
+      echo "   Rewrote powerbi-fabric MCP URL to $POWERBI_FABRIC_MCP_URL for use-case '$use_case'."
+    fi
+  fi
+
   echo ""
   echo "🔄 Uploading '$use_case' → blob://$CONTAINER_NAME/$use_case/ ..."
 
@@ -115,11 +144,15 @@ for use_case in "${SELECTED[@]}"; do
   az storage blob upload-batch \
     --account-name "$STORAGE_ACCOUNT" \
     --destination "$CONTAINER_NAME" \
-    --source "$LOCAL_PATH" \
+    --source "$UPLOAD_PATH" \
     --destination-path "use-cases/$use_case" \
     --auth-mode login \
     --overwrite \
     --only-show-errors
+
+  if [ -n "$TMP_DIR" ]; then
+    rm -rf "$TMP_DIR"
+  fi
 
   echo "   ✅ '$use_case' uploaded successfully."
 done

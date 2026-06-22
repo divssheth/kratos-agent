@@ -44,6 +44,28 @@ param agentApiPath string = 'kratos-agent'
 ])
 param staticWebAppLocation string = 'eastus2'
 
+@description('Enable delegated user auth (OBO) flow in backend service')
+param enableUserAuthObo bool = false
+
+@description('Enable Power BI Fabric MCP usage in backend service')
+param enablePowerbiFabricMcp bool = false
+
+@description('Enable workspace selector UX/features')
+param enableWorkspaceSelector bool = false
+
+@description('Entra tenant ID used for OBO token exchange')
+param azureTenantId string = ''
+
+@description('Entra app client ID used for OBO token exchange')
+param azureClientId string = ''
+
+@secure()
+@description('Entra app client secret used for OBO token exchange')
+param azureClientSecret string = ''
+
+@description('Optional explicit OBO token endpoint override')
+param azureTokenEndpoint string = ''
+
 // ─── Resource Naming ───
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
@@ -210,6 +232,13 @@ module agentService './modules/agent-service.bicep' = {
     bingSearchEndpoint: bingSearch.outputs.endpoint
     blobStorageEndpoint: blobStorage.outputs.endpoint
     staticWebAppUrl: staticWebApp.outputs.url
+    enableUserAuthObo: enableUserAuthObo
+    enablePowerbiFabricMcp: enablePowerbiFabricMcp
+    enableWorkspaceSelector: enableWorkspaceSelector
+    azureTenantId: azureTenantId
+    azureClientId: azureClientId
+    azureClientSecret: azureClientSecret
+    azureTokenEndpoint: azureTokenEndpoint
   }
 }
 

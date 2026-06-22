@@ -14,6 +14,7 @@ class MockSettings:
     azure_tenant_id = "test-tenant-id"
     azure_client_id = "test-client-id"
     azure_client_secret = "test-client-secret"
+    azure_token_endpoint = ""
 
 
 def test_delegated_access_token_ttl():
@@ -317,3 +318,14 @@ def test_token_endpoint_construction():
 
     expected = "https://login.microsoftonline.com/my-tenant/oauth2/v2.0/token"
     assert service.token_endpoint == expected
+
+
+def test_token_endpoint_uses_explicit_override():
+    """Test token endpoint URL override via settings."""
+    settings = MockSettings()
+    settings.azure_tenant_id = "ignored-tenant"
+    settings.azure_token_endpoint = "https://custom-idp.example.com/oauth2/token"
+
+    service = AuthService(settings)
+
+    assert service.token_endpoint == "https://custom-idp.example.com/oauth2/token"

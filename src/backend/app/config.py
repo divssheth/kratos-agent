@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     azure_tenant_id: str = ""
     azure_client_id: str = ""
     azure_client_secret: str = ""
+    azure_token_endpoint: str = ""
 
     # Local mode — run the backend without any Azure services.
     #   * SQLite replaces Cosmos DB (persistence under ``local_data_dir``)

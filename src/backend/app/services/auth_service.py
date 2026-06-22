@@ -54,7 +54,10 @@ class AuthService:
         self.tenant_id = getattr(settings, "azure_tenant_id", "")
         self.client_id = getattr(settings, "azure_client_id", "")
         self.client_secret = getattr(settings, "azure_client_secret", "")
-        self.token_endpoint = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
+        configured_token_endpoint = getattr(settings, "azure_token_endpoint", "")
+        self.token_endpoint = configured_token_endpoint or (
+            f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
+        )
         self.credential: DefaultAzureCredential | None = None
         self._http_session: httpx.AsyncClient | None = None
 

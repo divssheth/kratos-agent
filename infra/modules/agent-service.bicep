@@ -52,6 +52,28 @@ param blobStorageEndpoint string
 @description('Static Web App URL for CORS (e.g. https://xxx.azurestaticapps.net)')
 param staticWebAppUrl string = ''
 
+@description('Enable delegated user auth (OBO) flow in backend service')
+param enableUserAuthObo bool = false
+
+@description('Enable Power BI Fabric MCP usage in backend service')
+param enablePowerbiFabricMcp bool = false
+
+@description('Enable workspace selector UX/features')
+param enableWorkspaceSelector bool = false
+
+@description('Entra tenant ID used for OBO token exchange')
+param azureTenantId string = ''
+
+@description('Entra app client ID used for OBO token exchange')
+param azureClientId string = ''
+
+@secure()
+@description('Entra app client secret used for OBO token exchange')
+param azureClientSecret string = ''
+
+@description('Optional explicit OBO token endpoint override')
+param azureTokenEndpoint string = ''
+
 // ─── ACR pull identity ───
 // A User-Assigned Managed Identity is created for ACR access so that the
 // AcrPull role assignment exists BEFORE the Container App tries to validate
@@ -142,6 +164,13 @@ resource agentService 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT', value: 'true' }
             { name: 'ENVIRONMENT', value: 'production' }
             { name: 'ALLOWED_ORIGINS', value: empty(staticWebAppUrl) ? '*' : staticWebAppUrl }
+            { name: 'ENABLE_USER_AUTH_OBO', value: string(enableUserAuthObo) }
+            { name: 'ENABLE_POWERBI_FABRIC_MCP', value: string(enablePowerbiFabricMcp) }
+            { name: 'ENABLE_WORKSPACE_SELECTOR', value: string(enableWorkspaceSelector) }
+            { name: 'AZURE_TENANT_ID', value: azureTenantId }
+            { name: 'AZURE_CLIENT_ID', value: azureClientId }
+            { name: 'AZURE_CLIENT_SECRET', value: azureClientSecret }
+            { name: 'AZURE_TOKEN_ENDPOINT', value: azureTokenEndpoint }
           ]
         }
       ]

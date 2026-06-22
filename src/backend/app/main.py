@@ -30,6 +30,7 @@ from app.routers import (
     use_cases,
 )
 from app.services.apm_service import ApmError, ApmService
+from app.services.auth_mode_controller import get_auth_mode_controller
 from app.services.blob_skill_service import BlobSkillService
 from app.services.cosmos_service import CosmosService
 from app.services.eval_service import EvalService
@@ -164,8 +165,13 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     application.state.skill_registry = registries.get("generic", SkillRegistry())
     logger.info("Loaded %d use-cases: %s", len(registries), list(registries.keys()))
 
+    # Initialize auth mode controller (Agent SP vs OBO mode selection)
+    auth_mode_controller = get_auth_mode_controller(settings)
+    application.state.auth_mode_controller = auth_mode_controller
+    logger.info("Auth mode: %s", auth_mode_controller.get_auth_mode_string())
+
     # Initialize Foundry hosted agent proxy (Copilot SDK runs in the hosted agent only)
-    foundry_proxy = FoundryAgentProxy(settings)
+    foundry_proxy = FoundryAgentProxy(settings, auth_mode_controller)
     await foundry_proxy.start()
     application.state.foundry_proxy = foundry_proxy
     application.state.settings = settings

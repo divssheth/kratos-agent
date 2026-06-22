@@ -16,6 +16,7 @@ import aiohttp
 from azure.identity.aio import DefaultAzureCredential
 
 from app.config import Settings
+from app.services.auth_mode_controller import AuthModeController, get_auth_mode_controller
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,11 @@ _MAX_INVOKE_ATTEMPTS = 3
 class FoundryAgentProxy:
     """Invokes the Foundry hosted agent via the Invocations REST API."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        auth_mode_controller: AuthModeController | None = None,
+    ) -> None:
         # Build the invocations endpoint URL
         if settings.foundry_agent_invocations_endpoint:
             self._endpoint = settings.foundry_agent_invocations_endpoint
@@ -46,7 +51,7 @@ class FoundryAgentProxy:
         # In local mode the hosted agent is an unauthenticated localhost stub;
         # skip the Azure credential entirely (container has no `az` CLI / MSI).
         self._local_mode = settings.is_local_mode
-        self._enable_user_auth_obo = settings.enable_user_auth_obo
+        self._auth_mode_controller = auth_mode_controller or get_auth_mode_controller(settings)
         self._credential = None if self._local_mode else DefaultAzureCredential()
         self._http_session: aiohttp.ClientSession | None = None
         # Warm pool of pre-provisioned, UNCLAIMED gateway sessions.
@@ -293,8 +298,8 @@ class FoundryAgentProxy:
             "conversationId": conversation_id,
             "useCase": use_case,
         }
-        if self._local_mode or not self._enable_user_auth_obo:
-            # Keep existing behavior unless OBO is explicitly enabled.
+        # Strip auth context if current mode doesn't accept it (e.g., Agent SP mode or local)
+        if self._auth_mode_controller.should_strip_auth_context():
             auth_context = None
         if auth_context:
             # Forward only non-secret auth hints. Token exchange remains server-side.
@@ -305,6 +310,9 @@ class FoundryAgentProxy:
                 "oboEnabled": bool(auth_context.get("oboEnabled", False)),
             }
             headers["x-kratos-auth-mode"] = str(payload["authContext"].get("mode", "none"))
+        else:
+            # Always include current auth mode header for observability
+            headers["x-kratos-current-auth-mode"] = self._auth_mode_controller.get_auth_mode_string()
 
         # Append agent_session_id as query parameter to reuse the same
         # gateway session (container) across messages in a conversation. For the

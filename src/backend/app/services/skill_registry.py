@@ -31,6 +31,9 @@ logger = logging.getLogger(__name__)
 # Regex matching YAML frontmatter block: ---\n...\n---
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 
+_DEFAULT_MCP_AUTH_MODE = "agent_app"
+_ALLOWED_MCP_AUTH_MODES = {"agent_app", "user_obo", "hybrid"}
+
 
 def _parse_frontmatter(text: str) -> tuple[dict, str]:
     """Parse YAML frontmatter from SKILL.md content.
@@ -55,6 +58,47 @@ def _update_frontmatter(text: str, **updates: object) -> str:
     fm.update(updates)
     fm_str = yaml.dump(fm, default_flow_style=False, sort_keys=False).strip()
     return f"---\n{fm_str}\n---\n\n{body.lstrip()}"
+
+
+def _normalize_mcp_auth_mode(value: object) -> str:
+    mode = str(value or _DEFAULT_MCP_AUTH_MODE).strip().lower()
+    return mode if mode in _ALLOWED_MCP_AUTH_MODES else _DEFAULT_MCP_AUTH_MODE
+
+
+def _split_mcp_auth_modes(raw_servers: dict) -> tuple[dict, dict[str, str]]:
+    """Split auth metadata from MCP server entries.
+
+    `.mcp.json` may include a server-local `auth_mode` metadata key.
+    Copilot SDK server config should not include this key, so we strip it
+    and keep it in a side map keyed by server name.
+    """
+    cleaned: dict = {}
+    auth_modes: dict[str, str] = {}
+    for name, cfg in raw_servers.items():
+        if isinstance(cfg, dict):
+            auth_modes[name] = _normalize_mcp_auth_mode(cfg.get("auth_mode"))
+            cleaned_cfg = dict(cfg)
+            cleaned_cfg.pop("auth_mode", None)
+            cleaned[name] = cleaned_cfg
+        else:
+            auth_modes[name] = _DEFAULT_MCP_AUTH_MODE
+            cleaned[name] = cfg
+    return cleaned, auth_modes
+
+
+def _with_mcp_auth_modes(servers: dict, auth_modes: dict[str, str] | None = None) -> dict:
+    """Attach auth_mode metadata when persisting `.mcp.json`."""
+    out: dict = {}
+    modes = auth_modes or {}
+    for name, cfg in servers.items():
+        mode = _normalize_mcp_auth_mode(modes.get(name, _DEFAULT_MCP_AUTH_MODE))
+        if isinstance(cfg, dict):
+            merged = dict(cfg)
+            merged["auth_mode"] = mode
+            out[name] = merged
+        else:
+            out[name] = cfg
+    return out
 
 
 def _skill_from_md(name: str, instructions: str, local_path: str = "") -> SkillMetadata:
@@ -95,6 +139,7 @@ class SkillRegistry:
     skills: dict[str, SkillMetadata] = field(default_factory=dict)
     mcp_servers: dict = field(default_factory=dict)
     mcp_sources: dict[str, str] = field(default_factory=dict)
+    mcp_auth_modes: dict[str, str] = field(default_factory=dict)
     _blob_service: BlobSkillService | None = field(default=None, repr=False)
 
     async def load(
@@ -113,6 +158,7 @@ class SkillRegistry:
         self.use_case = use_case
         self._blob_service = blob_service
         self.mcp_sources = {}
+        self.mcp_auth_modes = {}
 
         if blob_service is not None and blob_service.is_available:
             # Sync this use-case from blob → local filesystem
@@ -128,7 +174,8 @@ class SkillRegistry:
             mcp_path = local_dir / ".mcp.json"
             if mcp_path.exists():
                 try:
-                    self.mcp_servers = json.loads(mcp_path.read_text())
+                    raw_mcp = json.loads(mcp_path.read_text())
+                    self.mcp_servers, self.mcp_auth_modes = _split_mcp_auth_modes(raw_mcp)
                     self.mcp_sources = dict.fromkeys(self.mcp_servers, "blob")
                     logger.info("Loaded MCP servers (blob) for '%s': %s", use_case, list(self.mcp_servers.keys()))
                 except json.JSONDecodeError:
@@ -172,7 +219,8 @@ class SkillRegistry:
         mcp_path = uc_dir / ".mcp.json"
         if mcp_path.exists():
             try:
-                self.mcp_servers = json.loads(mcp_path.read_text())
+                raw_mcp = json.loads(mcp_path.read_text())
+                self.mcp_servers, self.mcp_auth_modes = _split_mcp_auth_modes(raw_mcp)
                 self.mcp_sources = dict.fromkeys(self.mcp_servers, "local")
                 logger.info("Loaded MCP servers for '%s': %s", use_case, list(self.mcp_servers.keys()))
             except json.JSONDecodeError:
@@ -277,6 +325,7 @@ class SkillRegistry:
                 continue
             self.mcp_servers[server.name] = server.to_copilot_config()
             self.mcp_sources[server.name] = f"apm:{server.name}"
+            self.mcp_auth_modes[server.name] = _DEFAULT_MCP_AUTH_MODE
             merged += 1
 
         if merged:
@@ -492,15 +541,20 @@ class SkillRegistry:
         logger.info("Removed skill: %s", name)
         return True
 
-    async def update_mcp_servers(self, servers: dict) -> None:
-        """Persist the MCP servers config as .mcp.json (local + blob)."""
+    async def update_mcp_servers(self, servers: dict, auth_modes: dict[str, str] | None = None) -> None:
+        """Persist MCP config as .mcp.json (local + blob), including auth metadata."""
         self.mcp_servers = servers
+        self.mcp_auth_modes = {
+            name: _normalize_mcp_auth_mode((auth_modes or {}).get(name, _DEFAULT_MCP_AUTH_MODE))
+            for name in servers
+        }
         # Manual edits are always blob- (or local-) authored. APM-sourced
         # entries that are also in this payload get re-classified — the
         # user just overrode them.
         source_label = "blob" if self._blob_service and self._blob_service.is_available else "local"
         self.mcp_sources = dict.fromkeys(servers, source_label)
-        content = json.dumps(servers, indent=2).encode()
+        persisted_servers = _with_mcp_auth_modes(servers, self.mcp_auth_modes)
+        content = json.dumps(persisted_servers, indent=2).encode()
 
         # Write to local filesystem so in-process sessions can reload
         if self._blob_service and self._blob_service.is_available:

@@ -410,12 +410,14 @@ class MCPConfigResponse(BaseModel):
 
     servers: dict
     sources: dict[str, str] = {}
+    authModes: dict[str, str] = {}  # server_name -> "agent_app" | "user_obo" | "hybrid"
 
 
 class MCPConfigUpdate(BaseModel):
     """Payload for updating the MCP servers config."""
 
     servers: dict
+    authModes: dict[str, str] = {}
 
 
 # ─── Evals ───────────────────────────────────────────────────────────────────

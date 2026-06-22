@@ -39,6 +39,24 @@ def use_case_dir(tmp_path: Path) -> Path:
         "---\nname: disabled-skill\ndescription: A disabled skill\nenabled: false\n---\n\n# Disabled Skill"
     )
 
+    # MCP config with explicit and implicit auth modes
+    (uc / ".mcp.json").write_text(
+        '{\n'
+        '  "microsoft-learn": {\n'
+        '    "type": "http",\n'
+        '    "url": "https://learn.microsoft.com/api/mcp",\n'
+        '    "tools": ["*"],\n'
+        '    "auth_mode": "user_obo"\n'
+        '  },\n'
+        '  "workday": {\n'
+        '    "type": "local",\n'
+        '    "command": "workday-mcp-server",\n'
+        '    "args": [],\n'
+        '    "tools": ["*"]\n'
+        '  }\n'
+        '}'
+    )
+
     return tmp_path
 
 
@@ -108,3 +126,16 @@ async def test_system_prompt_loaded(use_case_dir: Path, monkeypatch: pytest.Monk
 
     assert "You are a helpful assistant" in registry.system_prompt
     assert registry.use_case == "generic"
+
+
+@pytest.mark.asyncio
+async def test_mcp_auth_modes_loaded_and_sanitized(use_case_dir: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.chdir(use_case_dir)
+    registry = SkillRegistry()
+    await registry.load("generic")
+
+    assert "microsoft-learn" in registry.mcp_servers
+    assert "workday" in registry.mcp_servers
+    assert "auth_mode" not in registry.mcp_servers["microsoft-learn"]
+    assert registry.mcp_auth_modes["microsoft-learn"] == "user_obo"
+    assert registry.mcp_auth_modes["workday"] == "agent_app"

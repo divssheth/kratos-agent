@@ -22,6 +22,7 @@ async def get_mcp_config(use_case: str, request: Request) -> MCPConfigResponse:
     return MCPConfigResponse(
         servers=registry.mcp_servers,
         sources=getattr(registry, "mcp_sources", {}),
+        authModes=getattr(registry, "mcp_auth_modes", {}),
     )
 
 
@@ -33,10 +34,11 @@ async def update_mcp_config(use_case: str, body: MCPConfigUpdate, request: Reque
     if registry is None:
         raise HTTPException(status_code=404, detail=f"Use-case '{use_case}' not found")
 
-    await registry.update_mcp_servers(body.servers)
+    await registry.update_mcp_servers(body.servers, body.authModes)
 
     logger.info("MCP config updated for use-case '%s': %d servers", use_case, len(body.servers))
     return MCPConfigResponse(
         servers=body.servers,
         sources=getattr(registry, "mcp_sources", {}),
+        authModes=getattr(registry, "mcp_auth_modes", {}),
     )
